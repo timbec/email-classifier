@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 pydantic
 transformers
+google-auth-oauthlib
+google-auth
+google-api-python-client
