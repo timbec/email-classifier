@@ -1,22 +1,22 @@
 # Use the official Python base image
 FROM python:3.11-slim
 
-# Set the working directory in the container
+# Set the working directory inside the container
 WORKDIR /app
 
-# Print Python and pip version
-RUN python --version && pip --version
-
-# Show what's inside the requirements file
+# Copy requirements file and install dependencies
 COPY requirements.txt .
-RUN cat requirements.txt
-
-# Upgrade pip before installing dependencies
-RUN pip install --upgrade pip setuptools wheel
-
-# Install system dependencies (some packages need these)
-RUN apt-get update && apt-get install -y \
-    gcc libpq-dev python3-dev libssl-dev libffi-dev
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# COPY ALL application files (Fixes missing `main.py`)
+COPY . .  # ← This ensures `main.py` and other files are copied
+
+# Expose the FastAPI port
+EXPOSE 8080
+
+# Set Python path explicitly
+ENV PYTHONPATH=/app
+
+# Run FastAPI app
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+

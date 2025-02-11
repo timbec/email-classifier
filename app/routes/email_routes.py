@@ -1,5 +1,8 @@
 from fastapi import APIRouter
-from app.services.email_service import authenticate_gmail, test_authentication
+from fastapi import HTTPException
+from fastapi import BackgroundTasks
+from app.services.email_service import authenticate_gmail, test_authentication, list_recent_unread_emails
+
 
 from datetime import datetime, timedelta
 
@@ -11,49 +14,17 @@ def test_auth():
     if test_authentication():
         return {"message": "Authentication successful!"}
     else:
-        return {"message": "Authentication failed, please check your credentials."}
+        raise HTTPException(status_code=401, detail="Authentication failed, please check your credentials.")
     
 
 
 # Route to list unread emails for the past month
 @email_router.get("/list-recent-unread")
-def list_recent_unread():
-    service = authenticate_gmail()
+async def list_recent_unread():
+    service = await authenticate_gmail()
     emails = list_recent_unread_emails(service, days=30)  # Adjust the `days` parameter as needed
     return {"emails": emails}
 
-
-
-def list_recent_unread_emails(service, days=30):
-    # Set up the query to fetch emails from the past `days` days
-    date_cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
-    query = f"is:unread after:{date_cutoff}"
-    
-    try:
-        results = service.users().messages().list(userId='me', q=query, maxResults=20).execute()
-        messages = results.get('messages', [])
-
-        email_list = []
-        if not messages:
-            print("No unread emails found for the specified period.")
-            return email_list
-        else:
-            for message in messages:
-                msg = service.users().messages().get(userId='me', id=message['id']).execute()
-                headers = msg['payload']['headers']
-                subject = next((header['value'] for header in headers if header['name'] == 'Subject'), "No Subject")
-                from_email = next((header['value'] for header in headers if header['name'] == 'From'), "Unknown Sender")
-                email_list.append({"from": from_email, "subject": subject})
-
-                # Print each email
-                print(f"From: {from_email}, Subject: {subject}")
-
-        return email_list
-    except Exception as e:
-        print(f"Error occurred while listing emails: {e}")
-        return []
-
-    
 
 @email_router.get("/delete-old")
 def delete_old_emails():

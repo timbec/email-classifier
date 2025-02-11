@@ -4,7 +4,7 @@ from app.routes.email_routes import email_router
 app = FastAPI()
 
 @app.get("/")
-def read_root():
+def home():
     return {"message": "Hello, FastAPI!"}
 
 app.include_router(email_router, prefix="/emails", tags=["emails"])
