@@ -29,7 +29,8 @@ async def authenticate_gmail():
     loop = asyncio.get_running_loop()
     flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
 
-    creds = await loop.run_in_executor(None, flow.run_local_server, 0)  # Run in separate thread
+    creds = await loop.run_in_executor(None, lambda: flow.run_local_server(port=0))
+
     return build('gmail', 'v1', credentials=creds)
 
 
@@ -45,35 +46,46 @@ def delete_old_unread_emails(service):
         print("No unread emails older than a year found.")
     else:
         for message in messages:
+            print(message)
             msg_id = message['id']
             service.users().messages().delete(userId='me', id=msg_id).execute()
             print(f"Deleted message ID: {msg_id}")
 
 
 
-def list_recent_unread_emails(service, days=30):
+async def list_recent_unread_emails(service, days=30):
     # Set up the query to fetch emails from the past `days` days
     date_cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
     query = f"is:unread after:{date_cutoff}"
     
     try:
-        results = service.users().messages().list(userId='me', q=query, maxResults=20).execute()
+        loop = asyncio.get_running_loop()
+
+        # Run blocking API call in thread pool
+        results = await loop.run_in_executor(None, lambda: service.users().messages().list(userId='me', q=query, maxResults=20).execute())
         messages = results.get('messages', [])
+        
 
         email_list = []
         if not messages:
             print("No unread emails found for the specified period.")
             return email_list
-        else:
-            for message in messages:
-                msg = service.users().messages().get(userId='me', id=message['id']).execute()
-                headers = msg['payload']['headers']
-                subject = next((header['value'] for header in headers if header['name'] == 'Subject'), "No Subject")
-                from_email = next((header['value'] for header in headers if header['name'] == 'From'), "Unknown Sender")
-                email_list.append({"from": from_email, "subject": subject})
+        
+        # Fetch emails concurrently
+        email_tasks = [
+            loop.run_in_executor(None, lambda: service.users().messages().get(userId='me', id=message['id']).execute())
+            for message in messages
+        ]
+        messages_data = await asyncio.gather(*email_tasks)  # Fetch emails in parallel
+        
+        for msg in messages_data:
+            headers = msg['payload']['headers']
+            subject = next((header['value'] for header in headers if header['name'] == 'Subject'), "No Subject")
+            from_email = next((header['value'] for header in headers if header['name'] == 'From'), "Unknown Sender")
+            email_list.append({"from": from_email, "subject": subject})
 
-                # Print each email
-                print(f"From: {from_email}, Subject: {subject}")
+            # Print each email
+            print(f"From: {from_email}, Subject: {subject}")
 
         return email_list
     except Exception as e:

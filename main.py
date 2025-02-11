@@ -5,7 +5,7 @@ app = FastAPI()
 
 @app.get("/")
 def home():
-    return {"message": "Hello, FastAPI!"}
+    return {"message": "Welcome to the email classifier API!"}
 
 app.include_router(email_router, prefix="/emails", tags=["emails"])
 
